@@ -38,16 +38,26 @@ with st.form("band_form"):
             st.error("バンド名とメンバーを入力してください。")
 
 # -------------------------
-# 登録済みバンド表示
+# 登録済みバンド表示 + 削除機能
 # -------------------------
 st.header("📋 登録済みバンド")
 
 if st.session_state.bands:
-    df_bands = pd.DataFrame(
-        [(name, ", ".join(members)) for name, members in st.session_state.bands.items()],
-        columns=["バンド名", "メンバー"]
-    )
-    st.dataframe(df_bands, use_container_width=True)
+
+    for band_name, members in list(st.session_state.bands.items()):
+        col1, col2, col3 = st.columns([3, 5, 1])
+
+        with col1:
+            st.write(f"**{band_name}**")
+
+        with col2:
+            st.write(", ".join(members))
+
+        with col3:
+            if st.button("🗑", key=f"delete_{band_name}"):
+                del st.session_state.bands[band_name]
+                st.rerun()
+
 else:
     st.info("まだバンドが登録されていません。")
 
@@ -73,7 +83,6 @@ if st.button("割り当て実行"):
         placed = False
 
         for slot in time_slots:
-            # メンバー被りチェック
             if not set(members) & slot_members[slot]:
                 slot_assignments[slot].append(band_name)
                 slot_members[slot].update(members)
@@ -99,7 +108,6 @@ if st.button("割り当て実行"):
     df_result = pd.DataFrame(result_data, index=days)
     st.dataframe(df_result, use_container_width=True)
 
-    # 未割り当て表示
     if unassigned:
         st.warning("⚠ 割り当て不可:")
         st.write(", ".join(unassigned))
