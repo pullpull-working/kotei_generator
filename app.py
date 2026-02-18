@@ -27,12 +27,21 @@ st.header("📌 バンド登録")
 with st.form("band_form"):
     band_name = st.text_input("バンド名")
     members_input = st.text_input("メンバー（カンマ区切り）例: 田中,佐藤,鈴木")
+    
+    ng_slots = st.multiselect(
+        "参加できない枠（複数選択可）",
+        time_slots
+    )
+
     submitted = st.form_submit_button("登録")
 
     if submitted:
         if band_name and members_input:
             members = [m.strip() for m in members_input.split(",") if m.strip()]
-            st.session_state.bands[band_name] = members
+            st.session_state.bands[band_name] = {
+                "members": members,
+                "ng_slots": ng_slots
+            }
             st.success(f"{band_name} を登録しました！")
         else:
             st.error("バンド名とメンバーを入力してください。")
@@ -44,16 +53,22 @@ st.header("📋 登録済みバンド")
 
 if st.session_state.bands:
 
-    for band_name, members in list(st.session_state.bands.items()):
-        col1, col2, col3 = st.columns([3, 5, 1])
+    for band_name, data in list(st.session_state.bands.items()):
+        col1, col2, col3, col4 = st.columns([2, 4, 3, 1])
 
         with col1:
             st.write(f"**{band_name}**")
 
         with col2:
-            st.write(", ".join(members))
+            st.write(", ".join(data["members"]))
 
         with col3:
+            if data["ng_slots"]:
+                st.write("❌ " + ", ".join(data["ng_slots"]))
+            else:
+                st.write("制限なし")
+
+        with col4:
             if st.button("🗑", key=f"delete_{band_name}"):
                 del st.session_state.bands[band_name]
                 st.rerun()
@@ -70,19 +85,30 @@ if st.button("割り当て実行"):
 
     bands = st.session_state.bands.copy()
 
-    # 枠ごとのメンバー使用状況
     slot_members = {slot: set() for slot in time_slots}
     slot_assignments = defaultdict(list)
 
-    # メンバー数が多い順にソート（制約強いもの優先）
-    sorted_bands = sorted(bands.items(), key=lambda x: len(x[1]), reverse=True)
+    # 制約が強い順に並べる
+    sorted_bands = sorted(
+        bands.items(),
+        key=lambda x: (len(x[1]["members"]), len(x[1]["ng_slots"])),
+        reverse=True
+    )
 
     unassigned = []
 
-    for band_name, members in sorted_bands:
+    for band_name, data in sorted_bands:
+        members = data["members"]
+        ng = data["ng_slots"]
         placed = False
 
         for slot in time_slots:
+
+            # 参加不可枠チェック
+            if slot in ng:
+                continue
+
+            # メンバー被りチェック
             if not set(members) & slot_members[slot]:
                 slot_assignments[slot].append(band_name)
                 slot_members[slot].update(members)
