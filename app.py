@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from collections import defaultdict
+import re
 
 st.set_page_config(page_title="バンド割り当てアプリ", layout="wide")
 
@@ -26,7 +27,7 @@ st.header("📌 バンド登録")
 
 with st.form("band_form"):
     band_name = st.text_input("バンド名")
-    members_input = st.text_input("メンバー（カンマ区切り）例: 田中,佐藤,鈴木")
+    members_input = st.text_input("メンバー 例: 田中、佐藤、鈴木")
     
     ng_slots = st.multiselect(
         "参加できない枠（複数選択可）",
@@ -37,7 +38,7 @@ with st.form("band_form"):
 
     if submitted:
         if band_name and members_input:
-            members = [m.strip() for m in members_input.split(",") if m.strip()]
+            members = [m.strip() for m in re.split("[、,，､]", members_input) if m.strip()]
             st.session_state.bands[band_name] = {
                 "members": members,
                 "ng_slots": ng_slots
