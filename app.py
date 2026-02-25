@@ -2,6 +2,14 @@ import streamlit as st
 import pandas as pd
 import re
 from ortools.sat.python import cp_model
+import json
+import os
+
+DATA_FILE = "bands.json"
+
+def save_data():
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(st.session_state.bands, f, ensure_ascii=False, indent=2)
 
 st.set_page_config(page_title="バンド割り当てアプリ", layout="wide")
 
@@ -15,10 +23,14 @@ slots = ["前枠", "後枠"]
 time_slots = [f"{d}_{s}" for d in days for s in slots]
 
 # -------------------------
-# セッション状態初期化
+# セッション状態初期化（永続化対応）
 # -------------------------
 if "bands" not in st.session_state:
-    st.session_state.bands = {}
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            st.session_state.bands = json.load(f)
+    else:
+        st.session_state.bands = {}
 
 # -------------------------
 # バンド登録フォーム
@@ -44,6 +56,7 @@ with st.form("band_form"):
                 "ng_slots": ng_slots
             }
             st.success(f"{band_name} を登録しました！")
+            save_data()  # ←追加
         else:
             st.error("バンド名とメンバーを入力してください。")
 
@@ -71,6 +84,7 @@ if st.session_state.bands:
         with col4:
             if st.button("🗑", key=f"delete_{band_name}"):
                 del st.session_state.bands[band_name]
+                save_data()  # ←追加
                 st.rerun()
 else:
     st.info("まだバンドが登録されていません。")
