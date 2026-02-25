@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
-from collections import defaultdict
 import re
+from ortools.sat.python import cp_model
 
 st.set_page_config(page_title="バンド割り当てアプリ", layout="wide")
 
-st.title("🎸 バンド時間割 自動割り当てアプリ")
+st.title("バンド固定ジェネレータ")
 
 # -------------------------
 # 枠の定義（固定10枠）
 # -------------------------
 days = ["月", "火", "水", "木", "金"]
-slots = ["前半", "後半"]
+slots = ["前枠", "後枠"]
 time_slots = [f"{d}_{s}" for d in days for s in slots]
 
 # -------------------------
@@ -28,7 +28,7 @@ st.header("📌 バンド登録")
 with st.form("band_form"):
     band_name = st.text_input("バンド名")
     members_input = st.text_input("メンバー 例: 22れみ,22しおり、22ぷる､22めい，22かっくん、22いっせい")
-    
+
     ng_slots = st.multiselect(
         "参加できない枠（複数選択可）",
         time_slots
@@ -38,7 +38,7 @@ with st.form("band_form"):
 
     if submitted:
         if band_name and members_input:
-            members = [m.strip() for m in re.split("[、,，､]", members_input) if m.strip()]
+            members = [m.strip() for m in re.split(r"[、,，､]", members_input) if m.strip()]
             st.session_state.bands[band_name] = {
                 "members": members,
                 "ng_slots": ng_slots
@@ -53,7 +53,6 @@ with st.form("band_form"):
 st.header("📋 登録済みバンド")
 
 if st.session_state.bands:
-
     for band_name, data in list(st.session_state.bands.items()):
         col1, col2, col3, col4 = st.columns([2, 4, 3, 1])
 
@@ -73,51 +72,78 @@ if st.session_state.bands:
             if st.button("🗑", key=f"delete_{band_name}"):
                 del st.session_state.bands[band_name]
                 st.rerun()
-
 else:
     st.info("まだバンドが登録されていません。")
 
 # -------------------------
-# 割り当て処理
+# OR-Tools 割り当て処理
 # -------------------------
 st.header("🚀 自動割り当て")
 
 if st.button("割り当て実行"):
 
-    bands = st.session_state.bands.copy()
+    bands = st.session_state.bands
+    band_names = list(bands.keys())
 
-    slot_members = {slot: set() for slot in time_slots}
-    slot_assignments = defaultdict(list)
+    model = cp_model.CpModel()
 
-    # 制約が強い順に並べる
-    sorted_bands = sorted(
-        bands.items(),
-        key=lambda x: (len(x[1]["members"]), len(x[1]["ng_slots"])),
-        reverse=True
+    # 変数: x[(band, slot)] = 1ならその枠に配置
+    x = {}
+    for b in band_names:
+        for s in time_slots:
+            x[(b, s)] = model.NewBoolVar(f"x_{b}_{s}")
+
+    # -------------------------
+    # 制約1: 各バンドは高々1枠
+    # -------------------------
+    for b in band_names:
+        model.Add(sum(x[(b, s)] for s in time_slots) <= 1)
+
+    # -------------------------
+    # 制約2: メンバー被り禁止
+    # 同じ枠に同じメンバーが含まれるバンドは同時配置不可
+    # -------------------------
+    for s in time_slots:
+        for i in range(len(band_names)):
+            for j in range(i + 1, len(band_names)):
+                b1 = band_names[i]
+                b2 = band_names[j]
+
+                if set(bands[b1]["members"]) & set(bands[b2]["members"]):
+                    model.Add(x[(b1, s)] + x[(b2, s)] <= 1)
+
+    # -------------------------
+    # 制約3: 参加不可枠
+    # -------------------------
+    for b in band_names:
+        for s in bands[b]["ng_slots"]:
+            model.Add(x[(b, s)] == 0)
+
+    # -------------------------
+    # 目的関数: 配置バンド数を最大化
+    # -------------------------
+    model.Maximize(
+        sum(x[(b, s)] for b in band_names for s in time_slots)
     )
 
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 10
+
+    status = solver.Solve(model)
+
+    slot_assignments = {s: [] for s in time_slots}
     unassigned = []
 
-    for band_name, data in sorted_bands:
-        members = data["members"]
-        ng = data["ng_slots"]
-        placed = False
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
 
-        for slot in time_slots:
-
-            # 参加不可枠チェック
-            if slot in ng:
-                continue
-
-            # メンバー被りチェック
-            if not set(members) & slot_members[slot]:
-                slot_assignments[slot].append(band_name)
-                slot_members[slot].update(members)
-                placed = True
-                break
-
-        if not placed:
-            unassigned.append(band_name)
+        for b in band_names:
+            assigned = False
+            for s in time_slots:
+                if solver.Value(x[(b, s)]) == 1:
+                    slot_assignments[s].append(b)
+                    assigned = True
+            if not assigned:
+                unassigned.append(b)
 
     # -------------------------
     # 結果表示
