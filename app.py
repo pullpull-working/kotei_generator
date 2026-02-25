@@ -27,7 +27,7 @@ st.header("📌 バンド登録")
 
 with st.form("band_form"):
     band_name = st.text_input("バンド名")
-    members_input = st.text_input("メンバー 例: 田中、佐藤、鈴木")
+    members_input = st.text_input("メンバー 例: 22れみ,22しおり、22ぷる､22めい，22かっくん、22いっせい")
     
     ng_slots = st.multiselect(
         "参加できない枠（複数選択可）",
