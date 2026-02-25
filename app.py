@@ -4,13 +4,13 @@ from collections import defaultdict
 
 st.set_page_config(page_title="バンド割り当てアプリ", layout="wide")
 
-st.title("固定ジェネレーター")
+st.title("🎸 バンド時間割 自動割り当てアプリ")
 
 # -------------------------
 # 枠の定義（固定10枠）
 # -------------------------
 days = ["月", "火", "水", "木", "金"]
-slots = ["前枠", "後枠"]
+slots = ["前半", "後半"]
 time_slots = [f"{d}_{s}" for d in days for s in slots]
 
 # -------------------------
@@ -26,7 +26,7 @@ st.header("📌 バンド登録")
 
 with st.form("band_form"):
     band_name = st.text_input("バンド名")
-    members_input = st.text_input("メンバー 例: 22ぷる、22めい、22かっくん、22いっせい、22しおり、22れみ")
+    members_input = st.text_input("メンバー（カンマ区切り）例: 田中,佐藤,鈴木")
     
     ng_slots = st.multiselect(
         "参加できない枠（複数選択可）",
@@ -128,7 +128,7 @@ if st.button("割り当て実行"):
         row = {}
         for s in slots:
             slot_key = f"{day}_{s}"
-            row[s] = "、 ".join(slot_assignments[slot_key])
+            row[s] = ", ".join(slot_assignments[slot_key])
         result_data.append(row)
 
     df_result = pd.DataFrame(result_data, index=days)
